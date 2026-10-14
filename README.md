@@ -128,7 +128,7 @@ Model policy stays `human_review_only` in production. A real lending release req
 
 ## Report and presentation
 
-`reports/project_report.md`, `project_report.html`, and the PDF explain the full pipeline and final findings. Every chart is a PNG image in `reports/figures/`. `reports/presentation_outline.md` gives a 25-minute walkthrough with 10 minutes of questions, satisfying the workbook's under-60-minute instruction.
+`reports/project_report.md`, `project_report.html`, and the PDF explain the full pipeline and final findings. Every chart is a PNG image in `reports/figures/`. `reports/presentation_outline.md`.
 
 ## Documentation references
 
