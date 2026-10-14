@@ -1,0 +1,68 @@
+# Standalone file. Run with: docker compose -f compose.production.yaml up --build -d
+# Supply DB server certificate/key and CA; certificate SAN must include db.
+services:
+  api:
+    build: .
+    env_file: .env
+    environment:
+      APP_ENV: production
+    command: [python, -m, uvicorn, "app.main:create_app", --factory, --host, "0.0.0.0", --port, "8000", --no-access-log, --proxy-headers, --forwarded-allow-ips, "172.28.0.10"]
+    networks: [private]
+    volumes:
+      - ./certs/ca.crt:/app/certs/ca.crt:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    expose: ["8000"]
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  db:
+    image: postgres:17-alpine
+    networks: [private]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-loanlens}
+      APP_DB_USER: ${APP_DB_USER:?Set APP_DB_USER}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?Set APP_DB_PASSWORD}
+    command: [postgres, -c, ssl=on, -c, ssl_cert_file=/var/lib/postgresql/tls/server.crt, -c, ssl_key_file=/var/lib/postgresql/tls/server.key]
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ./certs:/var/lib/postgresql/tls:ro
+      - ./scripts/init_db.sh:/docker-entrypoint-initdb.d/init_db.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      retries: 20
+  edge:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on: [api]
+    networks:
+      private:
+        ipv4_address: 172.28.0.10
+  retention:
+    build: .
+    env_file: .env
+    environment:
+      APP_ENV: production
+    command: [python, -m, scripts.retention_service]
+    volumes:
+      - ./certs/ca.crt:/app/certs/ca.crt:ro
+    networks: [private]
+    depends_on: [api]
+    restart: unless-stopped
+networks:
+  private:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+volumes:
+  database:
+  caddy_data:
